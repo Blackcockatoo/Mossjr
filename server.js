@@ -3,6 +3,20 @@ import { mkdirSync,readFileSync } from 'node:fs';
 import { openStore,areas } from './db.js';
 import { openAuth } from './auth.js';
 import {pathToFileURL} from 'node:url';
+export async function readJSON(req){
+ if(Number(req.headers['content-length'])>65536)throw Object.assign(Error('Request too large'),{status:413});
+ let body=req.body;
+ if(body===undefined){
+ const chunks=[];let size=0;
+ for await(const chunk of req){const bytes=Buffer.from(chunk);size+=bytes.length;if(size>65536)throw Object.assign(Error('Request too large'),{status:413});chunks.push(bytes);}
+ body=Buffer.concat(chunks).toString('utf8');
+ }
+ if(Buffer.isBuffer(body))body=body.toString('utf8');
+ if(typeof body==='string'){if(Buffer.byteLength(body)>65536)throw Object.assign(Error('Request too large'),{status:413});body=JSON.parse(body);}
+ if(!body||typeof body!=='object'||Array.isArray(body))throw Error('JSON object required');
+ if(Buffer.byteLength(JSON.stringify(body))>65536)throw Object.assign(Error('Request too large'),{status:413});
+ return body;
+}
 export function createServer(store,{origin=null}={}){
 if(origin&&new URL(origin).origin!==origin)throw Error("Use an exact origin");
 if(origin&&!origin.startsWith("https://"))throw Error("Hosted origin requires HTTPS");
@@ -32,7 +46,7 @@ const handler=async(req,res)=>{
  // Compare against the configured HTTPS origin, never forwarded host headers.
  const requestOrigin=req.headers.origin;if(requestOrigin!==expectedOrigin)return send(403,{error:'Same-origin request required'});
  if(!req.headers['content-type']?.startsWith('application/json'))return send(415,{error:'JSON required'});
- let body='';for await(const chunk of req){body+=chunk;if(Buffer.byteLength(body)>65536)return send(413,{error:'Request too large'});}const input=JSON.parse(body);
+ const input=await readJSON(req);
  if(url.pathname==='/api/login'){const session=await auth.login(input.username,input.password);res.setHeader('Set-Cookie',`moss_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${origin?'; Secure':''}`);return send(200,{ok:true});}
  if(url.pathname==='/api/logout'){await auth.logout(token);res.setHeader('Set-Cookie',`moss_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${origin?'; Secure':''}`);return send(200,{ok:true});}
  if(!user)return send(401,{error:'Sign in to record learning'});
@@ -42,7 +56,11 @@ const handler=async(req,res)=>{
  const match=url.pathname.match(/^\/api\/events\/([^/]+)\/evidence$/);if(match)return send(201,{id:await store.addEvidence(match[1],{...input,actor:attribution})});
  }
  send(404,{error:'Not found'});
- }catch(e){send(400,{error:origin?'Request could not be completed':e.message});}
+ }catch(e){
+ const credentialError=e.message==='Invalid credentials';
+ const throttleError=e.message==='Too many attempts. Try again in 15 minutes.';
+ send(e.status===413?413:credentialError?401:throttleError?429:400,{error:!origin||credentialError||throttleError||e.status===413?e.message:'Request could not be completed'});
+ }
 };
 const server=http.createServer(handler);server.handler=handler;return server;
 }

@@ -47,3 +47,21 @@ test('HTTPS origin, host checks and Secure cookie are enforced',async t=>{
  assert.equal((await post('http://mossjr.vercel.app')).status,403);
  const response=await post('https://mossjr.vercel.app');assert.equal(response.status,200);assert.match(response.headers.get('set-cookie'),/; Secure/);assert.equal(response.headers.get('cache-control'),'no-store');
 });
+test('Vercel pre-parsed JSON supports login and transactional record creation',async()=>{
+ const store=openStore(),auth=openAuth(store.db);
+ await auth.create({username:'parent',name:'Parent',role:'administrator',password:'parsed-body-test-password'});
+ const server=createServer(store,{origin:'https://mossjr.vercel.app'});
+ const call=async(path,body,cookie)=>{
+ const headers={};let status,text;
+ const req={method:'POST',url:path,body,headers:{host:'mossjr.vercel.app',origin:'https://mossjr.vercel.app','content-type':'application/json',cookie},async *[Symbol.asyncIterator](){throw Error('The consumed request stream must not be read');}};
+ const res={setHeader:(key,value)=>{headers[key]=value;},writeHead:(code,extra)=>{status=code;Object.assign(headers,extra);},end:value=>{text=value;}};
+ await server.handler(req,res);return {status,headers,data:JSON.parse(text)};
+ };
+ try{
+ const login=await call('/api/login',{username:'parent',password:'parsed-body-test-password'});assert.equal(login.status,200);
+ const cookie=login.headers['Set-Cookie'].split(';')[0];
+ assert.equal((await call('/api/events',event,cookie)).status,201);assert.equal((await store.audit()).length,1);
+ assert.equal((await call('/api/login',{username:'parent',password:'incorrect'})).status,401);
+ assert.equal((await call('/api/events',{...event,observation:'x'.repeat(65536)},cookie)).status,413);
+ }finally{store.db.close();}
+});
