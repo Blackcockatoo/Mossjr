@@ -1,4 +1,4 @@
 import {mkdirSync} from 'node:fs';import {openStore} from './db.js';import {openAuth} from './auth.js';
 const [username,name,role]=process.argv.slice(2);if(!username||!name||!role){console.error('Usage: node account.js username "Display name" administrator|educator|learner\nProvide password on stdin, not in command arguments.');process.exit(1);}
 let password='';for await(const chunk of process.stdin){password+=chunk;if(password.length>300)throw Error('Password too long');}
-mkdirSync('data',{recursive:true});const store=openStore('data/mossjr.sqlite');try{await openAuth(store.db).create({username,name,role,password:password.replace(/\r?\n$/,'')});console.log('Account created.');}catch(e){console.error(e.message);process.exitCode=1;}finally{store.db.close();}
+mkdirSync('data',{recursive:true});const store=process.env.TURSO_DATABASE_URL?await (await import('./hosted.js')).openHostedStore():openStore('data/mossjr.sqlite');try{await openAuth(store.db).create({username,name,role,password:password.replace(/\r?\n$/,'')});console.log('Account created.');}catch(e){console.error(e.message);process.exitCode=1;}finally{store.db.close();}

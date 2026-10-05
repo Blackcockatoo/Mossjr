@@ -2,3 +2,7 @@ node_modules/
 data/
 .env
 *.sqlite*
+
+node_modules/
+.env*
+.vercel/
