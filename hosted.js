@@ -13,9 +13,10 @@ export async function openHostedStore(env=process.env){
  const client=createClient({url:env.TURSO_DATABASE_URL,authToken:env.TURSO_AUTH_TOKEN});
  const store=openStore(null,adapter(client));await store.list();
  const auth=openAuth(store.db);await auth.user(null);
- if(env.MOSSJR_ADMIN_USERNAME&&env.MOSSJR_ADMIN_PASSWORD){
+ const adminPassword=env.MOSSJR_ADMIN_PASSWORD||env.MOSSJRADMIN_PASSWORD;
+ if(env.MOSSJR_ADMIN_USERNAME&&adminPassword){
  const exists=await store.db.prepare('SELECT id FROM accounts WHERE username=?').get(env.MOSSJR_ADMIN_USERNAME);
- if(!exists){try{await auth.create({username:env.MOSSJR_ADMIN_USERNAME,name:'Parent educator',password:env.MOSSJR_ADMIN_PASSWORD,role:'administrator'});}catch(e){if(!(await store.db.prepare('SELECT id FROM accounts WHERE username=?').get(env.MOSSJR_ADMIN_USERNAME)))throw e;}}
+ if(!exists){try{await auth.create({username:env.MOSSJR_ADMIN_USERNAME,name:'Parent educator',password:adminPassword,role:'administrator'});}catch(e){if(!(await store.db.prepare('SELECT id FROM accounts WHERE username=?').get(env.MOSSJR_ADMIN_USERNAME)))throw e;}}
  }
  return store;
 }
