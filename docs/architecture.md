@@ -6,7 +6,7 @@ Learning plan → planned activity → delivered learning event → evidence obj
 
 ## Current implementation
 
-A local Node HTTP server with SQLite, transactional event creation and evidence-reference insertion, append-only audit triggers, and vanilla browser UI. No external services, accounts, seeded personal records or secrets. Dates are local educational dates; audit times are UTC. The JSON export includes the full chronological record payloads.
+A local Node HTTP server with SQLite, transactional event creation and evidence-reference insertion, append-only audit triggers, and vanilla browser UI. No external services, seeded personal records or committed secrets. Local accounts and hashed sessions enforce administrator/educator/learner permissions for one household. Dates are local educational dates; audit times are UTC. The JSON export includes the full chronological record payloads.
 
 ## Durable production model (next)
 
@@ -23,7 +23,7 @@ A local Node HTTP server with SQLite, transactional event creation and evidence-
 ## Delivery sequence
 
 1. Working local ledger and provenance (this scaffold).
-2. Verified identity, household isolation and durable hosting/backup restore.
+2. Local authenticated accounts (implemented); household isolation, identity-provider integration and durable hosting/backup restore (next).
 3. Plans, planner, educator contributions and partial-school records.
 4. Evidence uploads, reusable objects and immutable corrections.
 5. Date-scoped PDF/ZIP review packs and secure reviewer portal.
