@@ -16,7 +16,7 @@ export function openStore(path=':memory:', connection=null) {
  if(connection){const tx=await db.transaction();try{const result=await fn(tx);await tx.commit();return result;}catch(e){await tx.rollback();throw e;}finally{tx.close();}}
  db.exec('BEGIN IMMEDIATE');try{const result=await fn(db);db.exec('COMMIT');return result;}catch(e){db.exec('ROLLBACK');throw e;}
  }
- return {db,
+ return {db,transaction,
  async list(){await ready;const events=await db.prepare('SELECT * FROM learning_events ORDER BY date DESC,created_at DESC').all();return Promise.all(events.map(async e=>({...e,areas:(await db.prepare('SELECT area FROM event_areas WHERE event_id=?').all(e.id)).map(a=>a.area),evidence:await db.prepare('SELECT * FROM evidence WHERE event_id=?').all(e.id)})));},
  async audit(){await ready;return db.prepare('SELECT * FROM audit ORDER BY seq DESC').all();},
  async create(input){await ready;

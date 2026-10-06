@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {openAgency} from './agency.js';
 import { mkdirSync,readFileSync } from 'node:fs';
 import { openStore,areas } from './db.js';
 import { openAuth } from './auth.js';
@@ -20,7 +21,7 @@ export async function readJSON(req){
 export function createServer(store,{origin=null}={}){
 if(origin&&new URL(origin).origin!==origin)throw Error("Use an exact origin");
 if(origin&&!origin.startsWith("https://"))throw Error("Hosted origin requires HTTPS");
-const auth=openAuth(store.db);
+const auth=openAuth(store.db);const agency=openAgency(store);
 const assets={'/':['public/index.html','text/html'],'/app.js':['public/app.js','text/javascript'],'/style.css':['public/style.css','text/css'],'/favicon.svg':['public/favicon.svg','image/svg+xml']};
 const handler=async(req,res)=>{
  res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
@@ -37,6 +38,10 @@ const handler=async(req,res)=>{
  user=await auth.user(token);
  if(req.method==='GET'&&assets[url.pathname]){const [file,type]=assets[url.pathname];res.writeHead(200,{'Content-Type':type});return res.end(readFileSync(new URL(file,import.meta.url)));}
  if(req.method==='GET'&&url.pathname==='/api/me')return send(200,{user});
+ if(req.method==='GET'&&url.pathname==='/api/agency-requests'){
+ if(user?.role!=='administrator')return send(403,{error:'Administrator permission required'});
+ return send(200,await agency.list());
+ }
  if(req.method==='GET'&&url.pathname==='/api/records'){
  if(!user)return send(401,{error:'Sign in to view learning records'});
  if(user.role==='learner')return send(200,{areas:[],events:(await store.list()).map(e=>({id:e.id,date:e.date,title:e.title,reflection:e.reflection})),audit:[]});
@@ -49,6 +54,9 @@ const handler=async(req,res)=>{
  const input=await readJSON(req);
  if(url.pathname==='/api/login'){const session=await auth.login(input.username,input.password);res.setHeader('Set-Cookie',`moss_session=${session}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${origin?'; Secure':''}`);return send(200,{ok:true});}
  if(url.pathname==='/api/logout'){await auth.logout(token);res.setHeader('Set-Cookie',`moss_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${origin?'; Secure':''}`);return send(200,{ok:true});}
+ if(url.pathname==='/api/agency-requests')return send(201,{id:await agency.submit(input),status:'pending',emailVerified:false,accessGranted:false});
+ const review=url.pathname.match(/^\/api\/agency-requests\/([^/]+)\/review$/);
+ if(review){if(user?.role!=='administrator')return send(403,{error:'Administrator permission required'});await agency.review(review[1],input.decision,`${user.name} [${user.id}]`);return send(200,{ok:true,accessGranted:false});}
  if(!user)return send(401,{error:'Sign in to record learning'});
  if(!['administrator','educator'].includes(user.role))return send(403,{error:'Educator permission required'});
  const attribution=`${user.name} [${user.id}]`;
@@ -59,7 +67,7 @@ const handler=async(req,res)=>{
  }catch(e){
  const credentialError=e.message==='Invalid credentials';
  const throttleError=e.message==='Too many attempts. Try again in 15 minutes.';
- send(e.status===413?413:credentialError?401:throttleError?429:400,{error:!origin||credentialError||throttleError||e.status===413?e.message:'Request could not be completed'});
+ send(e.status|| (credentialError?401:throttleError?429:400),{error:!origin||credentialError||throttleError||[413,422,429,409,404].includes(e.status)?e.message:'Request could not be completed'});
  }
 };
 const server=http.createServer(handler);server.handler=handler;return server;

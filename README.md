@@ -59,3 +59,9 @@ Additional trusted household accounts can be created with `account.js`, using th
 ### Existing local records
 
 Local SQLite files and existing accounts remain compatible. A remote database starts empty unless migrated. Before transferring real records, stop the local app and back up `data/mossjr.sqlite`. Use Turso's SQLite import into a **new empty database**, then verify record, evidence, account and audit counts; do not re-enter records or merge by overwriting. Keep the original backup. Existing password hashes remain valid; revoke imported sessions (`DELETE FROM sessions`) before going live. Never commit or expose the database dump. No automatic transfer of private local data occurs.
+
+## External agency request portal
+
+The public Bureaucracy Portal contains four satirical desk headings and a finite application form. It collects professional name, agency, work email, role and purpose only; applicants are told to omit child/case/health details. Requests are persisted in the configured database, limited to three per email per day and 100 total per day, and visible only to administrators. This is basic intake limiting, not comprehensive bot protection.
+
+Work email is **unverified**: no email service is configured and no verification email is sent. Administrator decisions are `approved_for_followup` or `declined`, with an append-only review history separate from the educator learning audit. Approval creates no account and grants no records. An administrator must independently verify identity and arrange appropriate sharing; scoped external accounts, expiry and email verification remain pending. Do not give external workers the existing full-ledger educator role. Contact details remain stored for review; automated retention/deletion is not implemented.

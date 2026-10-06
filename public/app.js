@@ -21,6 +21,9 @@ $('#csv').onclick=()=>{if(!records)return;const q=v=>'"'+String(v).replaceAll('"
 function setDate(){const d=new Date();$('#event-form [name=date]').value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}setDate();
 async function initialize(){
  const {user}=await request('/api/me');currentUser=user;
+ $('#agency-admin').hidden=user?.role!=='administrator';
+ $('#agency-queue').replaceChildren();$('#agency-history').replaceChildren();
+ if(user?.role==='administrator')await loadAgencies();
  $('#signin').hidden=!!user;$('#logout').hidden=!user;$('#mode').hidden=!user||user.role==='learner';
  $('#educator').hidden=!user||user.role==='learner';$('#learner').hidden=!user||user.role!=='learner';
  $('#mode').textContent='Open learner view';
@@ -34,3 +37,12 @@ async function initialize(){
 $('#login-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,button=form.querySelector('button');button.disabled=true;try{await request('/api/login',Object.fromEntries(new FormData(form)));form.reset();await initialize();message('Signed in.');}catch(err){message(err.message);}finally{button.disabled=false;}};
 $('#logout').onclick=async()=>{try{await request('/api/logout',{});await initialize();message('Signed out.');}catch(e){message(e.message);}};
 initialize().catch(e=>message(e.message));
+
+async function loadAgencies(){
+ const data=await request('/api/agency-requests');
+ $('#agency-queue').replaceChildren(...data.requests.map(r=>{const a=card(r.name,`${r.agency} · ${r.role}`);a.append(node('p',`Work email (unverified): ${r.email}`),node('p',r.purpose),node('p',`${r.created_at} · ${r.status} · No access granted`));if(r.status==='pending')for(const [decision,label] of [['approved_for_followup','Approve for follow-up only'],['declined','Decline request']]){const b=node('button',label);b.onclick=async()=>{b.disabled=true;try{await request(`/api/agency-requests/${r.id}/review`,{decision});await loadAgencies();message('Review recorded. No account or record access granted.');}catch(e){message(e.message);b.disabled=false;}};a.append(b);}return a;}));
+ if(!data.requests.length)$('#agency-queue').append(node('p','No external requests.'));
+ $('#agency-history').replaceChildren(...data.reviews.map(r=>card(r.decision,`${r.at} · ${r.actor} · Request ${r.request_id}`)));
+}
+$('#refresh-agencies').onclick=()=>loadAgencies().catch(e=>message(e.message));
+$('#agency-form').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,b=form.querySelector('button');b.disabled=true;try{const input=Object.fromEntries(new FormData(form));input.acknowledge=form.elements.acknowledge.checked;const result=await request('/api/agency-requests',input);form.reset();$('#agency-status').textContent=`Request ${result.id} received. Pending review; email unverified; no access granted. Keep this reference. No email has been sent.`;if(currentUser?.role==='administrator')await loadAgencies();}catch(err){$('#agency-status').textContent=err.message;}finally{b.disabled=false;}};
